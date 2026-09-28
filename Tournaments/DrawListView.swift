@@ -291,14 +291,14 @@ struct DrawListView: View {
       let mine = try await service.mine()
       var merged: [String: DrawEntry] = [:]
       for item in mine.created {
-        merged[item.id] = DrawEntry(item: item, made: true, joined: false, spectating: false)
+        merged[item.id] = DrawEntry(item: item, made: true, joined: false, spectating: false, refereeing: false)
       }
       for item in mine.joined {
         if var existing = merged[item.id] {
           existing.joined = true
           merged[item.id] = existing
         } else {
-          merged[item.id] = DrawEntry(item: item, made: false, joined: true, spectating: false)
+          merged[item.id] = DrawEntry(item: item, made: false, joined: true, spectating: false, refereeing: false)
         }
       }
       for item in mine.spectated {
@@ -306,7 +306,15 @@ struct DrawListView: View {
           existing.spectating = true
           merged[item.id] = existing
         } else {
-          merged[item.id] = DrawEntry(item: item, made: false, joined: false, spectating: true)
+          merged[item.id] = DrawEntry(item: item, made: false, joined: false, spectating: true, refereeing: false)
+        }
+      }
+      for item in mine.refereed {
+        if var existing = merged[item.id] {
+          existing.refereeing = true
+          merged[item.id] = existing
+        } else {
+          merged[item.id] = DrawEntry(item: item, made: false, joined: false, spectating: false, refereeing: true)
         }
       }
       rows = merged.values.sorted { left, right in
@@ -459,13 +467,16 @@ private struct DrawEntry: Identifiable {
   var made: Bool
   var joined: Bool
   var spectating: Bool
+  var refereeing: Bool
 
   var id: String { item.id }
 
   var mark: String {
     if made && joined { return "Made · Joined" }
     if made { return "Made" }
+    if joined && refereeing { return "Joined · Referee" }
     if joined { return "Joined" }
+    if refereeing { return "Referee" }
     if spectating { return "Spectating" }
     return VenueClock.phaseTitle(item)
   }

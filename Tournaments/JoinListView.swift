@@ -14,6 +14,68 @@ struct JoinListView: View {
 
   private let service = TournamentService()
 
+  private var searchField: some View {
+    HStack(spacing: 8) {
+      Image(systemName: "magnifyingglass")
+        .foregroundStyle(Theme.mute)
+      TextField("Search", text: $query)
+        .textInputAutocapitalization(.never)
+        .autocorrectionDisabled()
+    }
+    .padding(.horizontal, 14)
+    .frame(maxWidth: .infinity)
+    .frame(height: 54)
+    .background(Theme.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    .overlay {
+      RoundedRectangle(cornerRadius: 16, style: .continuous)
+        .stroke(Theme.line, lineWidth: 1)
+    }
+  }
+
+  private var yearMenu: some View {
+    Menu {
+      Button {
+        year = nil
+      } label: {
+        if year == nil {
+          Label("All", systemImage: "checkmark")
+        } else {
+          Text("All")
+        }
+      }
+      ForEach(years, id: \.self) { value in
+        Button {
+          year = value
+        } label: {
+          if year == value {
+            Label(String(value), systemImage: "checkmark")
+          } else {
+            Text(String(value))
+          }
+        }
+      }
+    } label: {
+      HStack {
+        Text(year.map(String.init) ?? "Year")
+          .font(.system(size: 16))
+          .foregroundStyle(Theme.ink)
+        Spacer()
+        Image(systemName: "chevron.up.chevron.down")
+          .font(.system(size: 12, weight: .semibold))
+          .foregroundStyle(Theme.mute)
+      }
+      .padding(.horizontal, 14)
+      .frame(maxWidth: .infinity)
+      .frame(height: 54)
+      .background(Theme.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+      .overlay {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+          .stroke(Theme.line, lineWidth: 1)
+      }
+    }
+    .frame(maxWidth: .infinity)
+  }
+
   var body: some View {
     ScreenColumn(
       kicker: "",
@@ -22,57 +84,18 @@ struct JoinListView: View {
       refresh: { await load() }
     ) {
       VStack(alignment: .leading, spacing: 14) {
-        HStack(spacing: 8) {
-          Image(systemName: "magnifyingglass")
-            .foregroundStyle(Theme.mute)
-          TextField("Search", text: $query)
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
-        }
-        .padding(.horizontal, 14)
-        .frame(height: 54)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay {
-          RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .stroke(Theme.line, lineWidth: 1)
-        }
-        Menu {
-          Button {
-            year = nil
-          } label: {
-            if year == nil {
-              Label("All", systemImage: "checkmark")
-            } else {
-              Text("All")
+        let pad = UIDevice.current.userInterfaceIdiom == .pad
+        Group {
+          if pad {
+            HStack(spacing: 14) {
+              searchField
+              yearMenu
             }
-          }
-          ForEach(years, id: \.self) { value in
-            Button {
-              year = value
-            } label: {
-              if year == value {
-                Label(String(value), systemImage: "checkmark")
-              } else {
-                Text(String(value))
-              }
+          } else {
+            VStack(spacing: 14) {
+              searchField
+              yearMenu
             }
-          }
-        } label: {
-          HStack {
-            Text(year.map(String.init) ?? "Year")
-              .font(.system(size: 16))
-              .foregroundStyle(Theme.ink)
-            Spacer()
-            Image(systemName: "chevron.up.chevron.down")
-              .font(.system(size: 12, weight: .semibold))
-              .foregroundStyle(Theme.mute)
-          }
-          .padding(.horizontal, 14)
-          .frame(height: 54)
-          .background(Theme.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-          .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-              .stroke(Theme.line, lineWidth: 1)
           }
         }
         if loading {
@@ -189,7 +212,8 @@ struct JoinListView: View {
   }
 
   private func joinRow(_ item: TournamentItem) -> some View {
-    VStack(alignment: .leading, spacing: 0) {
+    let done = VenueClock.phase(item) == "Completed"
+    return VStack(alignment: .leading, spacing: 0) {
       Color.clear
         .frame(height: 92)
         .frame(maxWidth: .infinity)
@@ -234,6 +258,8 @@ struct JoinListView: View {
       RoundedRectangle(cornerRadius: 16, style: .continuous)
         .stroke(Theme.line, lineWidth: 1)
     }
+    .saturation(done ? 0 : 1)
+    .opacity(done ? 0.55 : 1)
   }
 
   private func ownerButton(_ item: TournamentItem, ink: Color) -> some View {

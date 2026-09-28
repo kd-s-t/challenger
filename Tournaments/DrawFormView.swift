@@ -44,7 +44,7 @@ struct DrawFormView: View {
 
   var body: some View {
     ScreenColumn(
-      kicker: "DRAW",
+      kicker: "",
       title: existingId == nil ? "New tournament" : "Edit tournament",
       subtitle: existingId == nil ? "This stays a draft until you post it." : (status == "draft" ? "Draft. Add players, then post." : "Name, venue, hours, and courts.")
     ) {

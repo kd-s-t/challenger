@@ -370,14 +370,15 @@ struct TournamentService {
     return body.tournaments
   }
 
-  func mine() async throws -> (joined: [TournamentItem], created: [TournamentItem], spectated: [TournamentItem]) {
+  func mine() async throws -> (joined: [TournamentItem], created: [TournamentItem], spectated: [TournamentItem], refereed: [TournamentItem]) {
     struct Body: Decodable {
       let tournaments: [TournamentItem]
       let created: [TournamentItem]
       let spectated: [TournamentItem]
+      let refereed: [TournamentItem]
     }
     let body: Body = try await client.get(path: "/api/tournaments/mine")
-    return (body.tournaments, body.created, body.spectated)
+    return (body.tournaments, body.created, body.spectated, body.refereed)
   }
 
   func setSpectating(id: String, on: Bool) async throws -> (spectating: Bool, spectatorCount: Int) {
@@ -651,22 +652,29 @@ struct TournamentService {
     return body.tournament
   }
 
-  func setReferee(tournamentId: String, matchId: String, name: String?) async throws -> TournamentItem {
+  func setReferee(tournamentId: String, matchId: String, userId: String) async throws -> TournamentItem {
     struct Body: Encodable {
-      let refereeName: String?
-      func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        if let refereeName {
-          try container.encode(refereeName, forKey: .refereeName)
-        } else {
-          try container.encodeNil(forKey: .refereeName)
-        }
-      }
-      enum CodingKeys: String, CodingKey { case refereeName }
+      let refereeUserId: String
     }
     let body: TournamentDetailBody = try await client.patch(
       path: "/api/admin/tournaments/\(tournamentId)/matches/\(matchId)",
-      body: Body(refereeName: name)
+      body: Body(refereeUserId: userId)
+    )
+    return body.tournament
+  }
+
+  func clearReferee(tournamentId: String, matchId: String) async throws -> TournamentItem {
+    struct Body: Encodable {
+      let refereeUserId: String?
+      func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeNil(forKey: .refereeUserId)
+      }
+      enum CodingKeys: String, CodingKey { case refereeUserId }
+    }
+    let body: TournamentDetailBody = try await client.patch(
+      path: "/api/admin/tournaments/\(tournamentId)/matches/\(matchId)",
+      body: Body(refereeUserId: nil)
     )
     return body.tournament
   }

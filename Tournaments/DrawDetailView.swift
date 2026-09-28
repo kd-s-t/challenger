@@ -142,7 +142,7 @@ struct DrawDetailView: View {
                 path.append(.drawForm(id))
               }
             }
-            if (canDelete || owned) && VenueClock.phase(item) != "Ongoing" && VenueClock.phase(item) != "Completed" {
+            if item.createdById == auth.user?.id && VenueClock.phase(item) != "Ongoing" && VenueClock.phase(item) != "Completed" {
               Button("Delete tournament") {
                 showDelete = true
               }
@@ -273,43 +273,48 @@ struct DrawDetailView: View {
         .font(.system(size: 15, weight: .semibold))
         .foregroundStyle(Theme.onFill)
       }
-      if let owner = item?.createdByName, !owner.isEmpty, let ownerId = item?.createdById {
-        Button {
-          viewingOwner = OwnerRef(id: ownerId, name: owner, picture: item?.createdByPictureUrl)
-        } label: {
-          HStack(spacing: 6) {
-            Image(systemName: "person.fill")
-              .font(.system(size: 12, weight: .semibold))
-            Text(owner)
-              .font(.system(size: 15, weight: .semibold))
-          }
-          .foregroundStyle(Theme.onFill)
-        }
-        .buttonStyle(.plain)
-      }
-      if let item, hasJoined(item) || (VenueClock.phase(item) == "Ongoing" && spectatorCount != nil) {
-        HStack {
-          if hasJoined(item) {
-            Text("You have joined")
-              .font(.system(size: 13, weight: .bold))
-              .foregroundStyle(Theme.onFill)
-              .padding(.horizontal, 10)
-              .padding(.vertical, 6)
-              .background(Theme.ready, in: Capsule())
-          }
-          Spacer(minLength: 8)
-          if VenueClock.phase(item) == "Ongoing", let spectatorCount {
-            HStack(spacing: 6) {
-              Image(systemName: "eye.fill")
-                .font(.system(size: 14, weight: .semibold))
-              Text("\(spectatorCount)")
-                .font(.system(size: 15, weight: .semibold))
+      if let item {
+        let joined = hasJoined(item)
+        let watching = VenueClock.phase(item) == "Ongoing" ? spectatorCount : nil
+        let owner = item.createdByName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let ownerId = item.createdById
+        if !owner.isEmpty || joined || watching != nil {
+          HStack(alignment: .center, spacing: 8) {
+            if !owner.isEmpty, let ownerId {
+              Button {
+                viewingOwner = OwnerRef(id: ownerId, name: owner, picture: item.createdByPictureUrl)
+              } label: {
+                HStack(spacing: 6) {
+                  Image(systemName: "person.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                  Text(owner)
+                    .font(.system(size: 15, weight: .semibold))
+                }
+                .foregroundStyle(Theme.onFill)
+              }
+              .buttonStyle(.plain)
             }
-            .foregroundStyle(Theme.onFill.opacity(0.9))
-            .accessibilityLabel(spectatorCount == 1 ? "1 spectating" : "\(spectatorCount) spectating")
+            Spacer(minLength: 8)
+            if joined {
+              Text("You have joined")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(Theme.onFill)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Theme.ready, in: Capsule())
+            }
+            if let watching {
+              HStack(spacing: 6) {
+                Image(systemName: "eye.fill")
+                  .font(.system(size: 14, weight: .semibold))
+                Text("\(watching)")
+                  .font(.system(size: 15, weight: .semibold))
+              }
+              .foregroundStyle(Theme.onFill.opacity(0.9))
+              .accessibilityLabel(watching == 1 ? "1 spectating" : "\(watching) spectating")
+            }
           }
         }
-        .padding(.top, 8)
       }
     }
     .padding(.horizontal, 20)
@@ -431,11 +436,6 @@ struct DrawDetailView: View {
   private var canScore: Bool {
     guard let item, let userId = auth.user?.id else { return false }
     return item.createdById == userId && VenueClock.phase(item) == "Ongoing"
-  }
-
-  private var canDelete: Bool {
-    guard let user = auth.user else { return false }
-    return DrawAccess.canDelete(user)
   }
 
   private var canRequestJoin: Bool {
@@ -679,9 +679,9 @@ struct DrawDetailView: View {
           Task { await place(account, in: seat) }
         }
       case .referee(let matchId):
-        RefereeNameSheet(initial: currentReferee(matchId)) { name in
+        PlayerSearchSheet(title: "Set referee") { account in
           self.picker = nil
-          Task { await assignReferee(matchId: matchId, name: name) }
+          Task { await assignReferee(matchId: matchId, account: account) }
         }
       }
     }
@@ -965,7 +965,7 @@ struct DrawDetailView: View {
 
   @ViewBuilder
   private func courtControl(_ match: BracketMatch) -> some View {
-    if owned || canManage, let count = item?.courtCount, (1...30).contains(count), let matchId = match.matchId {
+    if owned || canManage || isAssignedReferee(match), let count = item?.courtCount, (1...30).contains(count), let matchId = match.matchId {
       Menu {
         Button("None") { Task { await setCourt(matchId: matchId, number: nil) } }
         ForEach(1...count, id: \.self) { number in
@@ -991,7 +991,7 @@ struct DrawDetailView: View {
       Menu {
         Button("Set") { picker = .referee(matchId) }
         if refereeLabel(match) != nil {
-          Button("Clear") { Task { await assignReferee(matchId: matchId, name: nil) } }
+          Button("Clear") { Task { await clearReferee(matchId: matchId) } }
         }
       } label: {
         Text(refereeLabel(match) ?? "Referee")
@@ -1008,17 +1008,28 @@ struct DrawDetailView: View {
   }
 
   private func canStart(_ match: BracketMatch) -> Bool {
-    guard canScore, match.matchId != nil, match.winnerId == nil, match.startedAt == nil else { return false }
+    guard canOfficiate(match), match.matchId != nil, match.winnerId == nil, match.startedAt == nil else { return false }
     let a = match.playerAName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     let b = match.playerBName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     return !a.isEmpty && !b.isEmpty
   }
 
   private func canRecord(_ match: BracketMatch) -> Bool {
-    guard canScore, match.matchId != nil, match.winnerId == nil, match.startedAt != nil else { return false }
+    guard canOfficiate(match), match.matchId != nil, match.winnerId == nil, match.startedAt != nil else { return false }
     let a = match.playerAName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     let b = match.playerBName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     return !a.isEmpty && !b.isEmpty
+  }
+
+  private func canOfficiate(_ match: BracketMatch) -> Bool {
+    guard let item, VenueClock.phase(item) == "Ongoing" else { return false }
+    if item.createdById == auth.user?.id { return true }
+    return isAssignedReferee(match)
+  }
+
+  private func isAssignedReferee(_ match: BracketMatch) -> Bool {
+    guard let mine = auth.user?.id, let refereeUserId = match.refereeUserId else { return false }
+    return refereeUserId == mine
   }
 
   private func pickAction(_ match: BracketMatch, slot: String) -> (() -> Void)? {
@@ -1163,16 +1174,21 @@ struct DrawDetailView: View {
     }
   }
 
-  private func currentReferee(_ matchId: String) -> String {
-    let loaded = item?.flow?.nodes.compactMap(\.match) ?? []
-    return loaded.first { $0.matchId == matchId }?.refereeName ?? ""
-  }
-
-  private func assignReferee(matchId: String, name: String?) async {
+  private func assignReferee(matchId: String, account: AccountHit) async {
     guard let item else { return }
     errorMessage = nil
     do {
-      self.item = try await service.setReferee(tournamentId: item.id, matchId: matchId, name: name)
+      self.item = try await service.setReferee(tournamentId: item.id, matchId: matchId, userId: account.id)
+    } catch {
+      errorMessage = error.localizedDescription
+    }
+  }
+
+  private func clearReferee(matchId: String) async {
+    guard let item else { return }
+    errorMessage = nil
+    do {
+      self.item = try await service.clearReferee(tournamentId: item.id, matchId: matchId)
     } catch {
       errorMessage = error.localizedDescription
     }
@@ -1714,36 +1730,6 @@ struct DrawDetailView: View {
     } catch {
       errorMessage = error.localizedDescription
       loading = false
-    }
-  }
-}
-
-private struct RefereeNameSheet: View {
-  let initial: String
-  let onSave: (String?) -> Void
-  @State private var name: String
-  @Environment(\.dismiss) private var dismiss
-
-  init(initial: String, onSave: @escaping (String?) -> Void) {
-    self.initial = initial
-    self.onSave = onSave
-    _name = State(initialValue: initial)
-  }
-
-  var body: some View {
-    ScreenColumn(kicker: "", title: "Referee", subtitle: "Type a name.") {
-      VStack(alignment: .leading, spacing: 16) {
-        AuthField(title: "Name", text: $name)
-        ClayButton(title: "Save") {
-          let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-          onSave(trimmed.isEmpty ? nil : trimmed)
-        }
-      }
-    }
-    .toolbar {
-      ToolbarItem(placement: .cancellationAction) {
-        Button("Close") { dismiss() }
-      }
     }
   }
 }

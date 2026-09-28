@@ -74,13 +74,20 @@ struct RootView: View {
             }
         }
       }
-      Tab("Join", systemImage: "person.2", value: ShellTab.join) {
+      Tab(value: ShellTab.join) {
         NavigationStack(path: $joinPath) {
           JoinListView(path: $joinPath, refreshTick: joinTick)
             .navigationDestination(for: AuthRoute.self) { route in
               destination(route, path: $joinPath)
             }
         }
+      } label: {
+        Image("Logo")
+          .renderingMode(.original)
+          .resizable()
+          .scaledToFit()
+          .frame(width: 28, height: 28)
+          .accessibilityLabel("Join")
       }
       if UIDevice.current.userInterfaceIdiom == .pad {
         Tab("Host a tournament", systemImage: "plus", value: ShellTab.create) {
