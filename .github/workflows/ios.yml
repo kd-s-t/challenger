@@ -16,9 +16,8 @@ jobs:
       - name: Build
         run: |
           set -euo pipefail
-          device=$(xcrun xctrace list devices 2>&1 | grep -oE 'iPhone [^()]+' | head -1 | awk '{$1=$1;print}')
           xcodebuild build \
             -project Tournaments.xcodeproj \
             -scheme Tournaments \
-            -destination "platform=iOS Simulator,name=${device}" \
+            -destination "generic/platform=iOS Simulator" \
             CODE_SIGNING_ALLOWED=NO
