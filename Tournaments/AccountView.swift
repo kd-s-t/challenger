@@ -27,43 +27,42 @@ struct AccountView: View {
             .padding(.vertical, 24)
         }
       } else {
-        Section("Profile picture") {
-          Button {
-            draftPicture = profilePicture
-            showAvatarPicker = true
-          } label: {
-            HStack(spacing: 14) {
-              avatar(profilePicture, size: 56, selected: true)
-              VStack(alignment: .leading, spacing: 4) {
-                Text("Change")
-                  .font(.subheadline.weight(.semibold))
-                  .foregroundStyle(Theme.ink)
-              }
-              Spacer(minLength: 0)
-              Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Theme.ink.opacity(0.35))
+        Section {
+          HStack(alignment: .center, spacing: 16) {
+            Button {
+              draftPicture = profilePicture
+              showAvatarPicker = true
+            } label: {
+              avatar(profilePicture, size: 76, selected: true)
             }
-            .padding(.vertical, 4)
+            .buttonStyle(.plain)
+            VStack(alignment: .leading, spacing: 6) {
+              TextField("Display name", text: $name)
+                .font(.system(size: 26, weight: .regular, design: .serif))
+                .foregroundStyle(Theme.ink)
+                .textFieldStyle(.plain)
+              TextField("Email", text: $email)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(Theme.mute)
+                .textFieldStyle(.plain)
+                .textContentType(.emailAddress)
+                .keyboardType(.emailAddress)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+              if let user = auth.user {
+                Label(
+                  user.emailVerified ? "Email verified" : "Email not verified",
+                  systemImage: user.emailVerified ? "checkmark.seal.fill" : "exclamationmark.envelope"
+                )
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(user.emailVerified ? .green : .orange)
+              }
+            }
           }
-          .buttonStyle(.plain)
+          .padding(.vertical, 6)
         }
 
         Section("Account") {
-          TextField("Display name", text: $name)
-          TextField("Email", text: $email)
-            .textContentType(.emailAddress)
-            .keyboardType(.emailAddress)
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
-          if let user = auth.user {
-            Label(
-              user.emailVerified ? "Email verified" : "Email not verified — check your inbox after changing",
-              systemImage: user.emailVerified ? "checkmark.seal.fill" : "exclamationmark.envelope"
-            )
-            .font(.caption)
-            .foregroundStyle(user.emailVerified ? .green : .orange)
-          }
           TextField("Mobile number", text: $phone)
             .keyboardType(.phonePad)
             .textContentType(.telephoneNumber)
@@ -122,14 +121,17 @@ struct AccountView: View {
         }
 
         Section {
+          Button("Sign out", role: .destructive) {
+            Task { await auth.logout() }
+          }
+        }
+
+        Section {
           Button("Delete account", role: .destructive) {
             deleteConfirm = ""
             deletePassword = ""
             auth.clearMessages()
             showDelete = true
-          }
-          Button("Sign out", role: .destructive) {
-            Task { await auth.logout() }
           }
         } footer: {
           Text("Permanently removes your account. Booking records may be kept without your personal details.")

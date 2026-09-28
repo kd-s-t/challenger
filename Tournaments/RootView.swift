@@ -20,6 +20,7 @@ struct RootView: View {
   @Environment(AuthStore.self) private var auth
   @State private var path: [AuthRoute] = []
   @State private var joinPath: [AuthRoute] = []
+  @State private var createPath: [AuthRoute] = []
   @State private var tab: ShellTab = .draws
   @State private var drawsTick = 0
   @State private var joinTick = 0
@@ -34,6 +35,8 @@ struct RootView: View {
         signedOut
       }
     }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .background(Theme.paper.ignoresSafeArea())
     .tint(Theme.clay)
     .preferredColorScheme(.light)
     .task {
@@ -46,6 +49,7 @@ struct RootView: View {
       if signedIn {
         path = []
         joinPath = []
+        createPath = []
         tab = .draws
       }
     }
@@ -78,17 +82,28 @@ struct RootView: View {
             }
         }
       }
-      Tab(value: ShellTab.create, role: .search) {
-        Color.clear
-      } label: {
-        Label("Create", systemImage: "plus")
+      if UIDevice.current.userInterfaceIdiom == .pad {
+        Tab("Host a tournament", systemImage: "plus", value: ShellTab.create) {
+          NavigationStack(path: $createPath) {
+            DrawFormView(path: $createPath, existingId: nil)
+              .navigationDestination(for: AuthRoute.self) { route in
+                destination(route, path: $createPath)
+              }
+          }
+        }
+      } else {
+        Tab(value: ShellTab.create, role: .search) {
+          Color.clear
+        } label: {
+          Label("Create", systemImage: "plus")
+        }
       }
     }
     .tabBarMinimizeBehavior(.onScrollDown)
     .onChange(of: tab) { _, newTab in
       if newTab == .draws { drawsTick += 1 }
       if newTab == .join { joinTick += 1 }
-      guard newTab == .create else { return }
+      guard newTab == .create, UIDevice.current.userInterfaceIdiom != .pad else { return }
       tab = .draws
       path.append(.drawForm(nil))
     }

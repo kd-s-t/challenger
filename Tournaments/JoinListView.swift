@@ -85,13 +85,18 @@ struct JoinListView: View {
             .font(.system(size: 16))
             .foregroundStyle(Theme.mute)
         } else {
-          ForEach(shown) { item in
-            Button {
-              path.append(.draw(item.id, false))
-            } label: {
-              joinRow(item)
+          let columns = UIDevice.current.userInterfaceIdiom == .pad
+            ? [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
+            : [GridItem(.flexible())]
+          LazyVGrid(columns: columns, spacing: 14) {
+            ForEach(shown) { item in
+              Button {
+                path.append(.draw(item.id, false))
+              } label: {
+                joinRow(item)
+              }
+              .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
           }
         }
       }
@@ -184,48 +189,50 @@ struct JoinListView: View {
   }
 
   private func joinRow(_ item: TournamentItem) -> some View {
-    let completed = VenueClock.phase(item) == "Completed"
-    let ink = completed ? Color(white: 0.45) : Theme.onFill
-    let quiet = completed ? Color(white: 0.55) : Theme.onFill.opacity(0.82)
-    return VStack(alignment: .leading, spacing: 6) {
-      HStack(alignment: .top, spacing: 12) {
-        PhaseLabel(item: item, color: completed ? quiet : Theme.onFill.opacity(0.8))
-        Spacer(minLength: 8)
-        if let venue = item.venueName, !venue.isEmpty {
-          Text(venue)
+    VStack(alignment: .leading, spacing: 0) {
+      Color.clear
+        .frame(height: 92)
+        .frame(maxWidth: .infinity)
+        .background { BannerPlate(raw: item.bannerUrl) }
+        .clipped()
+      VStack(alignment: .leading, spacing: 8) {
+        HStack(alignment: .top, spacing: 12) {
+          PhaseLabel(item: item, color: Theme.mute)
+          Spacer(minLength: 8)
+          if let venue = item.venueName, !venue.isEmpty {
+            Text(venue)
+              .font(.system(size: 13, weight: .semibold))
+              .foregroundStyle(Theme.mute)
+              .multilineTextAlignment(.trailing)
+          }
+        }
+        Text(item.titledName)
+          .font(.system(size: 22, weight: .regular, design: .serif))
+          .foregroundStyle(Theme.ink)
+        if let startsAt = item.startsAt {
+          Text(VenueClock.label(startsAt))
             .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(quiet)
-            .multilineTextAlignment(.trailing)
+            .foregroundStyle(Theme.ink)
+        }
+        if VenueClock.phase(item) == "Ongoing", let count = item.spectatorCount {
+          Text(count == 1 ? "1 spectating" : "\(count) spectating")
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(Theme.mute)
+        }
+        HStack(alignment: .bottom, spacing: 12) {
+          prizeLine(item, ink: Theme.ink, mute: Theme.mute)
+          Spacer(minLength: 8)
+          ownerButton(item, ink: Theme.ink)
         }
       }
-      Text(item.titledName)
-        .font(.system(size: 22, weight: .regular, design: .serif))
-        .foregroundStyle(ink)
-      if let startsAt = item.startsAt {
-        Text(VenueClock.label(startsAt))
-          .font(.system(size: 14))
-          .foregroundStyle(quiet)
-      }
-      if VenueClock.phase(item) == "Ongoing", let count = item.spectatorCount {
-        Text(count == 1 ? "1 spectating" : "\(count) spectating")
-          .font(.system(size: 13, weight: .semibold))
-          .foregroundStyle(quiet)
-      }
-      HStack(alignment: .bottom, spacing: 12) {
-        prizeLine(item, ink: ink, mute: quiet)
-        Spacer(minLength: 8)
-        ownerButton(item, ink: completed ? quiet : Theme.onFill)
-      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .padding(16)
     }
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(16)
-    .background {
-      BannerPlate(raw: item.bannerUrl, dimmed: completed)
-    }
+    .background(Theme.card)
     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     .overlay {
       RoundedRectangle(cornerRadius: 16, style: .continuous)
-        .stroke(completed ? Color(white: 0.82) : Color.white.opacity(0.18), lineWidth: 1)
+        .stroke(Theme.line, lineWidth: 1)
     }
   }
 

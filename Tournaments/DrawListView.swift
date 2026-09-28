@@ -33,7 +33,6 @@ struct DrawListView: View {
             .foregroundStyle(Theme.mute)
         } else {
           if let featured {
-            PhaseLabel(item: featured.item, color: Theme.mute)
             VStack(alignment: .leading, spacing: 0) {
               Button {
                 path.append(.draw(featured.item.id, featured.made))
@@ -46,18 +45,21 @@ struct DrawListView: View {
               }
             }
           }
-          Text("YOURS")
-            .font(.system(size: 12, weight: .semibold))
-            .tracking(1.4)
-            .foregroundStyle(Theme.mute)
-            .padding(.top, 8)
-          ForEach(rows) { row in
-            Button {
-              path.append(.draw(row.item.id, row.made))
-            } label: {
-              drawRow(row)
+          let rest = rows.filter { $0.id != featured?.id }
+          if !rest.isEmpty {
+            Text("YOURS")
+              .font(.system(size: 12, weight: .semibold))
+              .tracking(1.4)
+              .foregroundStyle(Theme.mute)
+              .padding(.top, 8)
+            ForEach(rest) { row in
+              Button {
+                path.append(.draw(row.item.id, row.made))
+              } label: {
+                drawRow(row)
+              }
+              .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
           }
         }
       }
@@ -205,100 +207,75 @@ struct DrawListView: View {
   }
 
   private func upcomingCard(_ entry: DrawEntry) -> some View {
-    VStack(alignment: .leading, spacing: 10) {
+    VStack(alignment: .leading, spacing: 0) {
+      Color.clear
+        .frame(height: 148)
+        .frame(maxWidth: .infinity)
+        .background { BannerPlate(raw: entry.item.bannerUrl) }
+        .clipped()
+      cardFacts(entry, titleSize: 28)
+    }
+    .background(Theme.card)
+    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+    .overlay {
+      RoundedRectangle(cornerRadius: 22, style: .continuous)
+        .stroke(Theme.line, lineWidth: 1)
+    }
+  }
+
+  private func drawRow(_ row: DrawEntry) -> some View {
+    VStack(alignment: .leading, spacing: 0) {
+      Color.clear
+        .frame(height: 92)
+        .frame(maxWidth: .infinity)
+        .background { BannerPlate(raw: row.item.bannerUrl) }
+        .clipped()
+      cardFacts(row, titleSize: 22)
+    }
+    .background(Theme.card)
+    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    .overlay {
+      RoundedRectangle(cornerRadius: 16, style: .continuous)
+        .stroke(Theme.line, lineWidth: 1)
+    }
+  }
+
+  private func cardFacts(_ entry: DrawEntry, titleSize: CGFloat) -> some View {
+    VStack(alignment: .leading, spacing: 8) {
       HStack(alignment: .top) {
-        PhaseLabel(item: entry.item, color: Theme.onFill.opacity(0.8))
+        PhaseLabel(item: entry.item, color: Theme.mute)
         Spacer(minLength: 8)
         if let venue = entry.item.venueName, !venue.isEmpty {
           Text(venue)
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(Theme.onFill.opacity(0.9))
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(Theme.mute)
             .multilineTextAlignment(.trailing)
         }
       }
       Text(entry.item.titledName)
-        .font(.system(size: 32, weight: .regular, design: .serif))
-        .foregroundStyle(Theme.onFill)
+        .font(.system(size: titleSize, weight: .regular, design: .serif))
+        .foregroundStyle(Theme.ink)
       if let startsAt = entry.item.startsAt {
         Text(VenueClock.label(startsAt))
-          .font(.system(size: 15, weight: .semibold))
-          .foregroundStyle(Theme.onFill)
+          .font(.system(size: 14, weight: .semibold))
+          .foregroundStyle(Theme.ink)
       }
-      spectatorLine(entry.item, ink: Theme.onFill.opacity(0.9))
+      spectatorLine(entry.item, ink: Theme.mute)
       HStack(alignment: .bottom) {
-        prizeLine(entry.item, ink: Theme.onFill, mute: Theme.onFill.opacity(0.8))
+        prizeLine(entry.item, ink: Theme.ink, mute: Theme.mute)
         Spacer(minLength: 8)
         VStack(alignment: .trailing, spacing: 4) {
           if entry.made {
             Text("Created by you")
-              .font(.system(size: 14, weight: .semibold))
-              .foregroundStyle(Theme.onFill)
-          }
-          ownerButton(entry.item, ink: Theme.onFill)
-        }
-      }
-    }
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(20)
-    .background {
-      ZStack {
-        BannerPlate(raw: entry.item.bannerUrl)
-        if VenueClock.phase(entry.item) == "Ongoing" {
-          RisingLines()
-            .opacity(0.7)
-        }
-      }
-    }
-    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-  }
-
-  private func drawRow(_ row: DrawEntry) -> some View {
-    let completed = VenueClock.phase(row.item) == "Completed"
-    let ink = completed ? Color(white: 0.45) : Theme.onFill
-    let quiet = completed ? Color(white: 0.55) : Theme.onFill.opacity(0.82)
-    return VStack(alignment: .leading, spacing: 6) {
-      HStack(alignment: .top, spacing: 12) {
-        PhaseLabel(item: row.item, color: completed ? quiet : Theme.onFill.opacity(0.8))
-        Spacer(minLength: 8)
-        if let venue = row.item.venueName, !venue.isEmpty {
-          Text(venue)
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(quiet)
-            .multilineTextAlignment(.trailing)
-        }
-      }
-      Text(row.item.titledName)
-        .font(.system(size: 22, weight: .regular, design: .serif))
-        .foregroundStyle(ink)
-      if let startsAt = row.item.startsAt {
-        Text(VenueClock.label(startsAt))
-          .font(.system(size: 14))
-          .foregroundStyle(quiet)
-      }
-      spectatorLine(row.item, ink: quiet)
-      HStack(alignment: .bottom, spacing: 12) {
-        prizeLine(row.item, ink: ink, mute: quiet)
-        Spacer(minLength: 8)
-        VStack(alignment: .trailing, spacing: 4) {
-          if row.made {
-            Text("Created by you")
               .font(.system(size: 13, weight: .semibold))
-              .foregroundStyle(completed ? quiet : Theme.onFill)
+              .foregroundStyle(Theme.clay)
           }
-          ownerButton(row.item, ink: completed ? quiet : Theme.onFill)
+          ownerButton(entry.item, ink: Theme.ink)
         }
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(16)
-    .background {
-      BannerPlate(raw: row.item.bannerUrl, dimmed: completed)
-    }
-    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-    .overlay {
-      RoundedRectangle(cornerRadius: 16, style: .continuous)
-        .stroke(completed ? Color(white: 0.82) : Color.white.opacity(0.18), lineWidth: 1)
-    }
   }
 
   private func load() async {
@@ -363,12 +340,6 @@ struct DrawListView: View {
       }
     }
     .frame(maxWidth: .infinity)
-    .padding(14)
-    .background(Theme.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-    .overlay {
-      RoundedRectangle(cornerRadius: 16, style: .continuous)
-        .stroke(Theme.line, lineWidth: 1)
-    }
     .padding(.top, 10)
   }
 

@@ -111,6 +111,7 @@ struct NoticeBell: View {
       notes = try await service.notices()
       errorMessage = nil
     } catch {
+      if isCancel(error) { return }
       errorMessage = error.localizedDescription
     }
   }
@@ -120,6 +121,7 @@ struct NoticeBell: View {
       try await service.readNotices(all: true, id: nil)
       await reload()
     } catch {
+      if isCancel(error) { return }
       errorMessage = error.localizedDescription
     }
   }
@@ -133,7 +135,14 @@ struct NoticeBell: View {
       path.append(.draw(note.tournamentId, true))
       await reload()
     } catch {
+      if isCancel(error) { return }
       errorMessage = error.localizedDescription
     }
+  }
+
+  private func isCancel(_ error: Error) -> Bool {
+    if error is CancellationError { return true }
+    let ns = error as NSError
+    return ns.domain == NSURLErrorDomain && ns.code == NSURLErrorCancelled
   }
 }

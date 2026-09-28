@@ -173,7 +173,7 @@ struct ScreenColumn<Content: View>: View {
         }
         .padding(.horizontal, 24)
         .padding(.top, 12)
-        .padding(.bottom, 36)
+        .padding(.bottom, 120)
       }
       .scrollDismissesKeyboard(.interactively)
       .refreshableAction(refresh)

@@ -6,7 +6,7 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>tinio.x-court</string>
+			<string>tinio.challenger</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>xcourt</string>

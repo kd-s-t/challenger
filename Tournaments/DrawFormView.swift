@@ -51,40 +51,41 @@ struct DrawFormView: View {
       VStack(alignment: .leading, spacing: 16) {
         AuthField(title: "Tournament name", text: $name, content: .name)
         nameAndBanner
-        if existingId == nil {
-          VStack(alignment: .leading, spacing: 8) {
-            Text("Bracket size")
-              .font(.system(size: 13, weight: .medium))
-              .foregroundStyle(Theme.mute)
-            Picker("Bracket size", selection: $size) {
-              ForEach(sizes, id: \.self) { count in
-                Text("\(count) players").tag(count)
-              }
-            }
-            .pickerStyle(.menu)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 14)
-            .frame(height: 54)
-            .background(Theme.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay {
-              RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Theme.line, lineWidth: 1)
-            }
+        if UIDevice.current.userInterfaceIdiom == .pad, existingId == nil {
+          HStack(alignment: .top, spacing: 14) {
+            bracketSizeField
+              .frame(maxWidth: .infinity, alignment: .leading)
+            divisionPicker
+              .frame(maxWidth: .infinity, alignment: .leading)
           }
+          pairingPicker
         } else {
-          Text("\(size) players")
-            .font(.system(size: 16))
-            .foregroundStyle(Theme.ink)
+          if existingId == nil {
+            bracketSizeField
+          } else {
+            Text("\(size) players")
+              .font(.system(size: 16))
+              .foregroundStyle(Theme.ink)
+          }
+          pairingPicker
+          divisionPicker
         }
-        pairingPicker
-        divisionPicker
         AuthField(title: "Venue name", text: $venueName)
         VenueSearch(markerName: venueName, location: $venueLocation)
         DatePicker("Start day", selection: $date, displayedComponents: .date)
           .datePickerStyle(.compact)
           .tint(Theme.clay)
-        slotMenu("Begins", selection: $startSlot)
-        slotMenu("Until", selection: $untilSlot)
+        if UIDevice.current.userInterfaceIdiom == .pad {
+          HStack(alignment: .top, spacing: 14) {
+            slotMenu("Begins", selection: $startSlot)
+              .frame(maxWidth: .infinity, alignment: .leading)
+            slotMenu("Until", selection: $untilSlot)
+              .frame(maxWidth: .infinity, alignment: .leading)
+          }
+        } else {
+          slotMenu("Begins", selection: $startSlot)
+          slotMenu("Until", selection: $untilSlot)
+        }
         if let hours = VenueClock.hoursBetween(start: startSlot, until: untilSlot) {
           Text(hours == 1 ? "1 hour" : "\(hours) hours")
             .font(.system(size: 15, weight: .semibold))
@@ -151,6 +152,28 @@ struct DrawFormView: View {
   private var playFormatValue: String {
     if !division.hasSuffix("doubles") { return "singles" }
     return pairing == "fixed" ? "doubles" : "singles"
+  }
+
+  private var bracketSizeField: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("Bracket size")
+        .font(.system(size: 13, weight: .medium))
+        .foregroundStyle(Theme.mute)
+      Picker("Bracket size", selection: $size) {
+        ForEach(sizes, id: \.self) { count in
+          Text("\(count) players").tag(count)
+        }
+      }
+      .pickerStyle(.menu)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .padding(.horizontal, 14)
+      .frame(height: 54)
+      .background(Theme.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+      .overlay {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+          .stroke(Theme.line, lineWidth: 1)
+      }
+    }
   }
 
   private var pairingPicker: some View {

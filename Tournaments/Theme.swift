@@ -81,7 +81,12 @@ struct BannerPlate: View {
         wash
       }
       if dimmed {
-        Color.white.opacity(0.78)
+        Color.black.opacity(0.28)
+        LinearGradient(
+          colors: [Color.black.opacity(0.12), Color.black.opacity(0.62)],
+          startPoint: .top,
+          endPoint: .bottom
+        )
       } else {
         LinearGradient(
           colors: [Color.black.opacity(0.05), Color.black.opacity(0.45)],

@@ -32,6 +32,19 @@ private enum BracketLook {
   static let championHeight: CGFloat = 96
 }
 
+private struct PadBracketCover<Cover: View>: ViewModifier {
+  @Binding var isPresented: Bool
+  @ViewBuilder var cover: () -> Cover
+
+  func body(content: Content) -> some View {
+    if UIDevice.current.userInterfaceIdiom == .pad {
+      content.fullScreenCover(isPresented: $isPresented, content: cover)
+    } else {
+      content.sheet(isPresented: $isPresented, content: cover)
+    }
+  }
+}
+
 private struct BracketJoin: View {
   let matchCount: Int
   let cardHeight: CGFloat
@@ -109,9 +122,9 @@ struct DrawDetailView: View {
           } else if let item {
             storyCard(item)
             prizes(item)
+            publicWatch(item.id)
             if VenueClock.phase(item) == "Ongoing" {
               bracket(item)
-              publicWatch(item.id)
               summary(item)
             } else {
               if VenueClock.phase(item) != "Completed" {
@@ -124,12 +137,12 @@ struct DrawDetailView: View {
             if let board = standingBoard(item) {
               standings(board.rows, championId: board.championId)
             }
-            if (canManage || owned) && VenueClock.phase(item) != "Ongoing" {
+            if (canManage || owned) && VenueClock.phase(item) != "Ongoing" && VenueClock.phase(item) != "Completed" {
               LineButton(title: "Edit") {
                 path.append(.drawForm(id))
               }
             }
-            if (canDelete || owned) && VenueClock.phase(item) != "Ongoing" {
+            if (canDelete || owned) && VenueClock.phase(item) != "Ongoing" && VenueClock.phase(item) != "Completed" {
               Button("Delete tournament") {
                 showDelete = true
               }
@@ -150,6 +163,7 @@ struct DrawDetailView: View {
         .clipShape(UnevenRoundedRectangle(topLeadingRadius: 28, topTrailingRadius: 28, style: .continuous))
       }
     }
+    .coordinateSpace(name: "detailScroll")
     .background(Theme.paper)
     .ignoresSafeArea(edges: .top)
     .navigationBarTitleDisplayMode(.inline)
@@ -248,16 +262,16 @@ struct DrawDetailView: View {
           .padding(.top, 8)
       } else {
         if let item {
-          PhaseLabel(item: item, color: Theme.onFill.opacity(0.8))
+          PhaseLabel(item: item, color: Theme.onFill)
         }
         Text(item?.titledName ?? "")
         .font(.system(size: 28, weight: .semibold))
-        .foregroundStyle(Theme.onFill)
+        .foregroundStyle(Color.white)
       }
       if !bannerLine.isEmpty {
       Text(bannerLine)
-        .font(.system(size: 15))
-        .foregroundStyle(Theme.onFill.opacity(0.82))
+        .font(.system(size: 15, weight: .semibold))
+        .foregroundStyle(Theme.onFill)
       }
       if let owner = item?.createdByName, !owner.isEmpty, let ownerId = item?.createdById {
         Button {
@@ -298,18 +312,23 @@ struct DrawDetailView: View {
         .padding(.top, 8)
       }
     }
-    .frame(maxWidth: .infinity, alignment: .leading)
     .padding(.horizontal, 20)
-    .padding(.top, 88)
-    .padding(.bottom, 44)
+    .padding(.top, 16)
+    .padding(.bottom, 56)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(
+      UnevenRoundedRectangle(topLeadingRadius: 28, topTrailingRadius: 28, style: .continuous)
+        .fill(Color.black.opacity(0.88))
+    )
+    .frame(maxWidth: .infinity, minHeight: 340, alignment: .bottom)
     .background {
-      ZStack(alignment: .bottom) {
+      GeometryReader { geo in
+        let y = geo.frame(in: .named("detailScroll")).minY
+        let pull = max(y, 0)
+        bannerWash
         bannerFill
-        LinearGradient(
-          colors: [Color.white.opacity(0.16), Color.clear],
-          startPoint: .top,
-          endPoint: .center
-        )
+          .frame(width: geo.size.width, height: geo.size.height + pull)
+          .offset(y: pull > 0 ? -pull : -y * 0.45)
       }
     }
   }
@@ -589,7 +608,7 @@ struct DrawDetailView: View {
             .padding(12)
             .padding(.bottom, 36)
         }
-        .frame(height: 280)
+        .frame(height: UIDevice.current.userInterfaceIdiom == .pad ? 380 : 280)
         HStack(spacing: 14) {
           Text("Drag to view")
             .font(.system(size: 13, weight: .medium))
@@ -610,7 +629,7 @@ struct DrawDetailView: View {
         RoundedRectangle(cornerRadius: 18, style: .continuous)
           .stroke(BracketLook.gold.opacity(0.25), lineWidth: 1)
       }
-      .sheet(isPresented: $showBracket) {
+      .modifier(PadBracketCover(isPresented: $showBracket) {
         NavigationStack {
           ScrollView([.horizontal, .vertical]) {
             bracketBoard(rounds, cardHeight: cardHeight, gap: gap)
@@ -631,7 +650,7 @@ struct DrawDetailView: View {
             resultSheet(pick)
           }
         }
-      }
+      })
     }
   }
 
@@ -1405,18 +1424,17 @@ struct DrawDetailView: View {
 
   private func playWindow(_ item: TournamentItem) -> (start: Date, end: Date)? {
     let matches = item.flow?.nodes.compactMap(\.match) ?? []
-    guard let firstRound = matches.map(\.round).min(),
-          let lastRound = matches.map(\.round).max() else {
-      return nil
+    let firstRound = matches.map(\.round).min()
+    let lastRound = matches.map(\.round).max()
+    let matchStart = firstRound.flatMap { round in
+      matches.filter { $0.round == round }.compactMap { $0.startedAt.flatMap(VenueClock.parse) }.min()
     }
-    let starts = matches.filter { $0.round == firstRound }.compactMap { match in
-      match.startedAt.flatMap(VenueClock.parse)
+    let matchEnd = lastRound.flatMap { round in
+      matches.filter { $0.round == round }.compactMap { $0.endedAt.flatMap(VenueClock.parse) }.max()
     }
-    guard let start = starts.min() else { return nil }
-    let ends = matches.filter { $0.round == lastRound }.compactMap { match in
-      match.endedAt.flatMap(VenueClock.parse)
-    }
-    guard let end = ends.max(), end >= start else { return nil }
+    let start = matchStart ?? item.startsAt.flatMap(VenueClock.parse)
+    let end = matchEnd ?? item.endsAt.flatMap(VenueClock.parse)
+    guard let start, let end, end >= start else { return nil }
     return (start, end)
   }
 
@@ -1533,12 +1551,6 @@ struct DrawDetailView: View {
       }
     }
     .frame(maxWidth: .infinity)
-    .padding(14)
-    .background(Theme.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-    .overlay {
-      RoundedRectangle(cornerRadius: 16, style: .continuous)
-        .stroke(Theme.line, lineWidth: 1)
-    }
   }
 
   private func canPhotograph(_ item: TournamentItem) -> Bool {
@@ -1688,6 +1700,7 @@ struct DrawDetailView: View {
   }
 
   private func remove() async {
+    guard let item, VenueClock.phase(item) != "Completed" else { return }
     loading = true
     errorMessage = nil
     do {

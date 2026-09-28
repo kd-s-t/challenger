@@ -9,5 +9,6 @@ struct TournamentsApp: App {
       RootView()
         .environment(auth)
     }
+    .defaultSize(width: 1032, height: 1376)
   }
 }

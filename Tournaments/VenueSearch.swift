@@ -16,24 +16,45 @@ struct VenueMap: View {
   var longitude: Double
 
   var body: some View {
-    Map(
-      position: .constant(
-        .region(
-          MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
-            span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02)
+    VStack(alignment: .leading, spacing: 10) {
+      Map(
+        position: .constant(
+          .region(
+            MKCoordinateRegion(
+              center: coordinate,
+              span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02)
+            )
           )
         )
-      )
-    ) {
-      Marker(name, coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude))
+      ) {
+        Marker(name, coordinate: coordinate)
+      }
+      .frame(height: 220)
+      .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+      .overlay {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+          .stroke(Theme.line, lineWidth: 1)
+      }
+      Button {
+        let item = MKMapItem(location: CLLocation(latitude: latitude, longitude: longitude), address: nil)
+        item.name = name
+        item.openInMaps(launchOptions: [
+          MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving
+        ])
+      } label: {
+        Text("Directions")
+          .font(.system(size: 15, weight: .semibold))
+          .foregroundStyle(Theme.onFill)
+          .frame(maxWidth: .infinity)
+          .frame(height: 44)
+          .background(Theme.clay, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+      }
+      .buttonStyle(.plain)
     }
-    .frame(height: 220)
-    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-    .overlay {
-      RoundedRectangle(cornerRadius: 16, style: .continuous)
-        .stroke(Theme.line, lineWidth: 1)
-    }
+  }
+
+  private var coordinate: CLLocationCoordinate2D {
+    CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
   }
 }
 
