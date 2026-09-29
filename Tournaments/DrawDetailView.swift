@@ -674,12 +674,18 @@ struct DrawDetailView: View {
       case .player(let seat):
         PlayerSearchSheet(requesters: requests.map {
           AccountHit(id: $0.userId, name: $0.name, email: $0.email, pictureUrl: $0.pictureUrl)
+        }, onGuest: { name in
+          self.picker = nil
+          Task { await placeGuest(name, in: seat) }
         }) { account in
           self.picker = nil
           Task { await place(account, in: seat) }
         }
       case .referee(let matchId):
-        PlayerSearchSheet(title: "Set referee") { account in
+        PlayerSearchSheet(title: "Set referee", onGuest: { name in
+          self.picker = nil
+          Task { await assignReferee(matchId: matchId, name: name) }
+        }) { account in
           self.picker = nil
           Task { await assignReferee(matchId: matchId, account: account) }
         }
@@ -1174,6 +1180,16 @@ struct DrawDetailView: View {
     }
   }
 
+  private func assignReferee(matchId: String, name: String) async {
+    guard let item else { return }
+    errorMessage = nil
+    do {
+      self.item = try await service.setReferee(tournamentId: item.id, matchId: matchId, name: name)
+    } catch {
+      errorMessage = error.localizedDescription
+    }
+  }
+
   private func assignReferee(matchId: String, account: AccountHit) async {
     guard let item else { return }
     errorMessage = nil
@@ -1189,6 +1205,21 @@ struct DrawDetailView: View {
     errorMessage = nil
     do {
       self.item = try await service.clearReferee(tournamentId: item.id, matchId: matchId)
+    } catch {
+      errorMessage = error.localizedDescription
+    }
+  }
+
+  private func placeGuest(_ name: String, in seat: BracketSeat) async {
+    guard let item else { return }
+    errorMessage = nil
+    do {
+      self.item = try await service.assignPlayer(
+        tournamentId: item.id,
+        matchId: seat.matchId,
+        slot: seat.slot,
+        name: name
+      )
     } catch {
       errorMessage = error.localizedDescription
     }

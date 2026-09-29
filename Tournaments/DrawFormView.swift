@@ -434,12 +434,34 @@ struct DrawFormView: View {
 
   private func playerSearch(_ seat: DraftSeat) -> some View {
     NavigationStack {
-      PlayerSearchSheet(requesters: requesters) { account in
+      PlayerSearchSheet(requesters: requesters, onGuest: { name in
+        adding = nil
+        Task { await assignGuest(seat, name: name) }
+      }) { account in
         adding = nil
         Task { await assign(seat, account: account) }
       }
     }
     .presentationDragIndicator(.visible)
+  }
+
+  private func assignGuest(_ seat: DraftSeat, name: String) async {
+    guard let existingId else { return }
+    errorMessage = nil
+    busy = true
+    defer { busy = false }
+    do {
+      let item = try await service.assignPlayer(
+        tournamentId: existingId,
+        matchId: seat.matchId,
+        slot: seat.slot,
+        name: name
+      )
+      status = item.status
+      seats = seats(from: item)
+    } catch {
+      errorMessage = error.localizedDescription
+    }
   }
 
   private func assign(_ seat: DraftSeat, account: AccountHit) async {
@@ -664,6 +686,7 @@ private struct DraftSeat: Identifiable, Hashable {
 struct PlayerSearchSheet: View {
   var requesters: [AccountHit] = []
   var title = "Add player"
+  var onGuest: ((String) -> Void)? = nil
   let onPick: (AccountHit) -> Void
   @State private var query = ""
   @State private var hits: [AccountHit] = []
@@ -689,6 +712,26 @@ struct PlayerSearchSheet: View {
           }
         }
         AuthField(title: "Name or email", text: $query)
+        if let onGuest {
+          let typed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+          if !typed.isEmpty {
+            Button {
+              onGuest(typed)
+            } label: {
+              Text("Add \(typed)")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Theme.ink)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(14)
+                .background(Theme.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay {
+                  RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Theme.line, lineWidth: 1)
+                }
+            }
+            .buttonStyle(.plain)
+          }
+        }
         if let errorMessage {
           Notice(text: errorMessage, tone: Theme.danger)
         }

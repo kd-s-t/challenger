@@ -652,6 +652,17 @@ struct TournamentService {
     return body.tournament
   }
 
+  func setReferee(tournamentId: String, matchId: String, name: String) async throws -> TournamentItem {
+    struct Body: Encodable {
+      let refereeName: String
+    }
+    let body: TournamentDetailBody = try await client.patch(
+      path: "/api/admin/tournaments/\(tournamentId)/matches/\(matchId)",
+      body: Body(refereeName: name)
+    )
+    return body.tournament
+  }
+
   func setReferee(tournamentId: String, matchId: String, userId: String) async throws -> TournamentItem {
     struct Body: Encodable {
       let refereeUserId: String
