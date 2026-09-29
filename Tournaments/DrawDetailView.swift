@@ -856,7 +856,7 @@ struct DrawDetailView: View {
 
   private func bracketRounds(_ item: TournamentItem) -> [BracketRound] {
     let loaded = item.flow?.nodes.compactMap(\.match) ?? []
-    let matches = loaded.isEmpty ? emptyMatches(size: item.bracketSize) : loaded
+    let matches = loaded.isEmpty ? emptyMatches(size: item.bracketSize, singles: item.playFormat != "doubles") : loaded
     let numbers = Set(matches.map(\.round)).sorted()
     let total = numbers.count
     return numbers.map { number in
@@ -875,14 +875,14 @@ struct DrawDetailView: View {
     return "Round of \(players)"
   }
 
-  private func emptyMatches(size: Int) -> [BracketMatch] {
+  private func emptyMatches(size: Int, singles: Bool) -> [BracketMatch] {
     var remaining = max(size, 2)
     var round = 1
     var matches: [BracketMatch] = []
     while remaining > 1 {
       let count = remaining / 2
       for index in 0..<count {
-        matches.append(.slot(round: round, index: index))
+        matches.append(.slot(round: round, index: index, singles: singles))
       }
       remaining = count
       round += 1
@@ -893,9 +893,9 @@ struct DrawDetailView: View {
   private func matchCard(_ match: BracketMatch, title: String) -> some View {
     VStack(spacing: 0) {
       matchHeader(match, title: title)
-      slotLine(match.playerAName, picture: match.playerAPictureUrl, score: match.scoreA, winner: match.winnerId != nil && match.winnerId == match.playerAId, settled: match.winnerId != nil, mine: isMe(match.playerAUserId) || isMe(match.playerAPartnerUserId), onAdd: addAction(match, slot: "A"), onRemove: removeAction(match, slot: "A"), onPick: pickAction(match, slot: "A"))
+      slotLine(match, slot: "A")
       Rectangle().fill(BracketLook.gold.opacity(0.10)).frame(height: 1)
-      slotLine(match.playerBName, picture: match.playerBPictureUrl, score: match.scoreB, winner: match.winnerId != nil && match.winnerId == match.playerBId, settled: match.winnerId != nil, mine: isMe(match.playerBUserId) || isMe(match.playerBPartnerUserId), onAdd: addAction(match, slot: "B"), onRemove: removeAction(match, slot: "B"), onPick: pickAction(match, slot: "B"))
+      slotLine(match, slot: "B")
     }
     .frame(width: 220, alignment: .top)
     .background(Color.white)
@@ -1249,9 +1249,9 @@ struct DrawDetailView: View {
   }
 
   @ViewBuilder
-  private func slotLine(_ name: String?, picture: String?, score: Int?, winner: Bool, settled: Bool, mine: Bool, onAdd: (() -> Void)?, onRemove: (() -> Void)?, onPick: (() -> Void)?) -> some View {
-    let row = slotRow(name, picture: picture, score: score, winner: winner, settled: settled, mine: mine, onAdd: onAdd, onRemove: onRemove)
-    if let onPick {
+  private func slotLine(_ match: BracketMatch, slot: String) -> some View {
+    let row = slotRow(match, slot: slot)
+    if let onPick = pickAction(match, slot: slot) {
       Button(action: onPick) { row }
         .buttonStyle(.plain)
     } else {
@@ -1259,22 +1259,37 @@ struct DrawDetailView: View {
     }
   }
 
-  private func slotRow(_ name: String?, picture: String?, score: Int?, winner: Bool, settled: Bool, mine: Bool, onAdd: (() -> Void)?, onRemove: (() -> Void)?) -> some View {
+  private func slotRow(_ match: BracketMatch, slot: String) -> some View {
+    let sideA = slot == "A"
+    let name = sideA ? match.playerAName : match.playerBName
+    let picture = sideA ? match.playerAPictureUrl : match.playerBPictureUrl
+    let partnerPicture = sideA ? match.playerAPartnerPictureUrl : match.playerBPartnerPictureUrl
+    let members = sideA ? match.playerAMembers : match.playerBMembers
+    let hasPartner = sideA ? match.playerAHasPartner : match.playerBHasPartner
+    let score = sideA ? match.scoreA : match.scoreB
+    let winner = match.winnerId != nil && match.winnerId == (sideA ? match.playerAId : match.playerBId)
+    let settled = match.winnerId != nil
+    let mine = isMe(sideA ? match.playerAUserId : match.playerBUserId) || isMe(sideA ? match.playerAPartnerUserId : match.playerBPartnerUserId)
+    let onAdd = addAction(match, slot: slot)
+    let onRemove = removeAction(match, slot: slot)
     let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     let open = trimmed.isEmpty
     let lost = settled && !winner && !open
+    let needsPartner = !match.singles && !open && !hasPartner
+    let memberLine = members?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    let caption = needsPartner ? "Waiting for partner" : (!open && !memberLine.isEmpty && memberLine != trimmed ? memberLine : nil)
     return HStack(spacing: 8) {
       if open {
-        Circle()
-          .strokeBorder(BracketLook.gold.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [2, 2]))
-          .frame(width: 24, height: 24)
-          .overlay {
-            Text("+")
-              .font(.system(size: 10, weight: .semibold))
-              .foregroundStyle(BracketLook.goldDeep.opacity(0.7))
-          }
+        openSeat
       } else {
+        HStack(spacing: -8) {
           playerFace(picture, mine: mine, lost: lost, size: 24, stroke: mine && !lost ? 1.5 : 1)
+          if hasPartner {
+            playerFace(partnerPicture, mine: mine, lost: lost, size: 24, stroke: 1)
+          } else if needsPartner {
+            openSeat
+          }
+        }
       }
       if open, let onAdd {
         Button(action: onAdd) {
@@ -1284,11 +1299,19 @@ struct DrawDetailView: View {
         }
         .buttonStyle(.borderless)
       } else {
-        Text(open ? "TBD" : trimmed)
-          .font(.system(size: 14, weight: winner ? .semibold : .regular))
-          .foregroundStyle(lost ? BracketLook.ink.opacity(0.35) : (open ? BracketLook.ink.opacity(0.55) : BracketLook.ink))
-          .strikethrough(lost, color: BracketLook.ink.opacity(0.35))
-          .lineLimit(1)
+        VStack(alignment: .leading, spacing: 0) {
+          Text(open ? "TBD" : trimmed)
+            .font(.system(size: caption == nil ? 14 : 13, weight: winner ? .semibold : .regular))
+            .foregroundStyle(lost ? BracketLook.ink.opacity(0.35) : (open ? BracketLook.ink.opacity(0.55) : BracketLook.ink))
+            .strikethrough(lost, color: BracketLook.ink.opacity(0.35))
+            .lineLimit(1)
+          if let caption {
+            Text(caption)
+              .font(.system(size: 10))
+              .foregroundStyle(lost ? BracketLook.ink.opacity(0.35) : BracketLook.ink.opacity(0.7))
+              .lineLimit(1)
+          }
+        }
       }
       Spacer(minLength: 4)
       if let onRemove {
@@ -1308,6 +1331,18 @@ struct DrawDetailView: View {
     .frame(height: 40)
     .frame(maxWidth: .infinity, alignment: .leading)
     .background(winner ? BracketLook.gold.opacity(0.10) : (lost ? BracketLook.ink.opacity(0.03) : Color.clear))
+  }
+
+  private var openSeat: some View {
+    Circle()
+      .strokeBorder(BracketLook.gold.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [2, 2]))
+      .frame(width: 24, height: 24)
+      .background(Circle().fill(Color.white))
+      .overlay {
+        Text("+")
+          .font(.system(size: 10, weight: .semibold))
+          .foregroundStyle(BracketLook.goldDeep.opacity(0.7))
+      }
   }
 
   private func playerFace(_ raw: String?, mine: Bool, lost: Bool, size: CGFloat, stroke: CGFloat) -> some View {

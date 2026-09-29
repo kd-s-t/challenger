@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 enum AuthRoute: Hashable {
   case login
@@ -14,6 +15,26 @@ private enum ShellTab: Hashable {
   case draws
   case join
   case create
+}
+
+private enum JoinMark {
+  static let image: UIImage = {
+    let source = UIImage(named: "Logo")!
+    let side: CGFloat = 26
+    let format = UIGraphicsImageRendererFormat()
+    format.opaque = false
+    format.scale = 3
+    let renderer = UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format)
+    let rendered = renderer.image { _ in
+      let aspect = source.size.width / source.size.height
+      let fitted = aspect >= 1
+        ? CGSize(width: side, height: side / aspect)
+        : CGSize(width: side * aspect, height: side)
+      let origin = CGPoint(x: (side - fitted.width) / 2, y: (side - fitted.height) / 2)
+      source.draw(in: CGRect(origin: origin, size: fitted))
+    }
+    return rendered.withRenderingMode(.alwaysOriginal)
+  }()
 }
 
 struct RootView: View {
@@ -82,11 +103,7 @@ struct RootView: View {
             }
         }
       } label: {
-        Image("Logo")
-          .renderingMode(.original)
-          .resizable()
-          .scaledToFit()
-          .frame(width: 28, height: 28)
+        Image(uiImage: JoinMark.image)
           .accessibilityLabel("Join")
       }
       if UIDevice.current.userInterfaceIdiom == .pad {

@@ -12,8 +12,15 @@ struct BracketMatch: Decodable, Hashable, Identifiable {
   let playerBPartnerUserId: String?
   let playerAName: String?
   let playerBName: String?
+  let playerAMembers: String?
+  let playerBMembers: String?
   let playerAPictureUrl: String?
   let playerBPictureUrl: String?
+  let playerAPartnerPictureUrl: String?
+  let playerBPartnerPictureUrl: String?
+  let playerAHasPartner: Bool
+  let playerBHasPartner: Bool
+  let singles: Bool
   let winnerId: String?
   let scoreA: Int?
   let scoreB: Int?
@@ -26,7 +33,7 @@ struct BracketMatch: Decodable, Hashable, Identifiable {
 
   var id: String { matchId ?? "r\(round)-i\(index ?? 0)" }
 
-  static func slot(round: Int, index: Int) -> BracketMatch {
+  static func slot(round: Int, index: Int, singles: Bool) -> BracketMatch {
     BracketMatch(
       matchId: nil,
       round: round,
@@ -39,8 +46,15 @@ struct BracketMatch: Decodable, Hashable, Identifiable {
       playerBPartnerUserId: nil,
       playerAName: nil,
       playerBName: nil,
+      playerAMembers: nil,
+      playerBMembers: nil,
       playerAPictureUrl: nil,
       playerBPictureUrl: nil,
+      playerAPartnerPictureUrl: nil,
+      playerBPartnerPictureUrl: nil,
+      playerAHasPartner: false,
+      playerBHasPartner: false,
+      singles: singles,
       winnerId: nil,
       scoreA: nil,
       scoreB: nil,
