@@ -285,6 +285,8 @@ final class AuthStore {
         do {
             try await auth.deleteAccount(confirm: confirm, password: password)
             user = nil
+            errorMessage = nil
+            infoMessage = nil
             return true
         } catch {
             errorMessage = error.localizedDescription

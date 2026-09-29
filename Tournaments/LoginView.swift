@@ -6,7 +6,9 @@ struct LoginView: View {
   @State private var email = ""
   @State private var password = ""
   @State private var apple = AppleSignInPresenter()
+  @State private var emailBusy = false
   @State private var appleBusy = false
+  @State private var googleBusy = false
 
   var body: some View {
     ScreenColumn(
@@ -26,10 +28,10 @@ struct LoginView: View {
           .font(.system(size: 14, weight: .semibold))
           .foregroundStyle(Theme.clay)
         }
-        ClayButton(title: "Sign in", busy: auth.isSubmitting) {
-          Task { await auth.login(email: email, password: password) }
+        ClayButton(title: "Sign in", busy: emailBusy) {
+          Task { await signIn() }
         }
-        .disabled(auth.isSubmitting)
+        .disabled(emailBusy || appleBusy || googleBusy)
         if let infoMessage = auth.infoMessage {
           Notice(text: infoMessage)
         }
@@ -58,7 +60,7 @@ struct LoginView: View {
   private var providers: some View {
     VStack(spacing: 10) {
       Button {
-        guard !appleBusy, !auth.isSubmitting else { return }
+        guard !emailBusy, !appleBusy, !googleBusy else { return }
         appleBusy = true
         apple.onFinish = { result in
           Task { @MainActor in
@@ -75,8 +77,8 @@ struct LoginView: View {
             Image(systemName: "apple.logo")
             Text("Sign in with Apple")
           }
-          .opacity(appleBusy || auth.isSubmitting ? 0 : 1)
-          if appleBusy || auth.isSubmitting {
+          .opacity(appleBusy ? 0 : 1)
+          if appleBusy {
             ProgressView()
               .tint(.white)
           }
@@ -88,10 +90,10 @@ struct LoginView: View {
         .background(Color.black, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
       }
       .buttonStyle(.plain)
-      .disabled(appleBusy || auth.isSubmitting)
+      .disabled(emailBusy || appleBusy || googleBusy)
 
       Button {
-        Task { await auth.loginWithOAuth(provider: .google) }
+        Task { await continueWithGoogle() }
       } label: {
         ZStack {
           HStack(spacing: 10) {
@@ -101,8 +103,8 @@ struct LoginView: View {
               .frame(width: 20, height: 20)
             Text("Continue with Google")
           }
-          .opacity(auth.isSubmitting ? 0 : 1)
-          if auth.isSubmitting {
+          .opacity(googleBusy ? 0 : 1)
+          if googleBusy {
             ProgressView()
               .tint(Theme.ink)
           }
@@ -118,9 +120,21 @@ struct LoginView: View {
         }
       }
       .buttonStyle(.plain)
-      .disabled(auth.isSubmitting)
+      .disabled(emailBusy || appleBusy || googleBusy)
     }
     .padding(.top, 8)
+  }
+
+  private func signIn() async {
+    emailBusy = true
+    defer { emailBusy = false }
+    await auth.login(email: email, password: password)
+  }
+
+  private func continueWithGoogle() async {
+    googleBusy = true
+    defer { googleBusy = false }
+    await auth.loginWithOAuth(provider: .google)
   }
 
   private func resend() async {

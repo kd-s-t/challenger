@@ -249,6 +249,7 @@ struct AccountView: View {
       phone = details.user.phone ?? ""
       profilePicture = details.user.profilePicture ?? ""
     } catch {
+      if auth.user == nil { return }
       if let user = auth.user {
         name = user.name ?? ""
         email = user.email

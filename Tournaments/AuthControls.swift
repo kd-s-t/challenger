@@ -162,6 +162,8 @@ struct ScreenColumn<Content: View>: View {
           Text(title)
             .font(.system(size: 40, weight: .regular, design: .serif))
             .foregroundStyle(Theme.ink)
+            .multilineTextAlignment(logoHeight == nil ? .leading : .center)
+            .frame(maxWidth: .infinity, alignment: logoHeight == nil ? .leading : .center)
             .padding(.top, 10)
           Text(subtitle)
             .font(.system(size: 16))

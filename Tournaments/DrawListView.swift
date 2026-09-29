@@ -33,17 +33,12 @@ struct DrawListView: View {
             .foregroundStyle(Theme.mute)
         } else {
           if let featured {
-            VStack(alignment: .leading, spacing: 0) {
-              Button {
-                path.append(.draw(featured.item.id, featured.made))
-              } label: {
-                upcomingCard(featured)
-              }
-              .buttonStyle(.plain)
-              if VenueClock.phase(featured.item) == "Ongoing" {
-                watchShare(featured.item.id)
-              }
+            Button {
+              path.append(.draw(featured.item.id, featured.made))
+            } label: {
+              upcomingCard(featured)
             }
+            .buttonStyle(.plain)
           }
           let rest = rows.filter { $0.id != featured?.id }
           if !rest.isEmpty {
@@ -327,28 +322,6 @@ struct DrawListView: View {
       errorMessage = error.localizedDescription
     }
     loading = false
-  }
-
-  private func watchURL(_ id: String) -> URL {
-    APIConfig.baseURL
-      .appending(path: "tournament")
-      .appending(path: id)
-      .appending(path: "watch")
-  }
-
-  private func watchShare(_ id: String) -> some View {
-    let url = watchURL(id)
-    return VStack(spacing: 10) {
-      WatchQR(url: url.absoluteString)
-      Link(destination: url) {
-        Text(url.absoluteString)
-          .font(.system(size: 13, weight: .semibold))
-          .foregroundStyle(Theme.clay)
-          .multilineTextAlignment(.center)
-      }
-    }
-    .frame(maxWidth: .infinity)
-    .padding(.top, 10)
   }
 
   private func startTime(_ item: TournamentItem) -> TimeInterval {

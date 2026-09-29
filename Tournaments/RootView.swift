@@ -72,6 +72,8 @@ struct RootView: View {
         joinPath = []
         createPath = []
         tab = .draws
+      } else {
+        auth.clearMessages()
       }
     }
   }
