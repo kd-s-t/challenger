@@ -27,7 +27,7 @@ private enum BracketLook {
   static let ink = Color(red: 0.102, green: 0.102, blue: 0.102)
   static let court = Color(red: 0.184, green: 0.435, blue: 0.373)
   static let courtSoft = Color(red: 0.141, green: 0.357, blue: 0.302)
-  static let cardHeight: CGFloat = 127
+  static let cardHeight: CGFloat = 144
   static let gap: CGFloat = 28
   static let championHeight: CGFloat = 96
 }
@@ -49,6 +49,7 @@ private struct BracketJoin: View {
   let matchCount: Int
   let cardHeight: CGFloat
   let gap: CGFloat
+  var towardRight = true
 
   var body: some View {
     Canvas { context, size in
@@ -59,13 +60,16 @@ private struct BracketJoin: View {
         let y2 = center(pair * 2 + 1)
         let mid = (y1 + y2) / 2
         let bend = min(28, size.width / 2)
-        path.move(to: CGPoint(x: 0, y: y1))
-        path.addLine(to: CGPoint(x: bend, y: y1))
-        path.addLine(to: CGPoint(x: bend, y: y2))
-        path.move(to: CGPoint(x: 0, y: y2))
-        path.addLine(to: CGPoint(x: bend, y: y2))
-        path.move(to: CGPoint(x: bend, y: mid))
-        path.addLine(to: CGPoint(x: size.width, y: mid))
+        let startX: CGFloat = towardRight ? 0 : size.width
+        let bendX: CGFloat = towardRight ? bend : size.width - bend
+        let endX: CGFloat = towardRight ? size.width : 0
+        path.move(to: CGPoint(x: startX, y: y1))
+        path.addLine(to: CGPoint(x: bendX, y: y1))
+        path.addLine(to: CGPoint(x: bendX, y: y2))
+        path.move(to: CGPoint(x: startX, y: y2))
+        path.addLine(to: CGPoint(x: bendX, y: y2))
+        path.move(to: CGPoint(x: bendX, y: mid))
+        path.addLine(to: CGPoint(x: endX, y: mid))
       }
       context.stroke(path, with: .color(BracketLook.goldDeep), lineWidth: 1.5)
     }
@@ -592,11 +596,22 @@ struct DrawDetailView: View {
     .clipShape(Circle())
   }
 
+  @ViewBuilder
   private func bracket(_ item: TournamentItem) -> some View {
     let rounds = bracketRounds(item)
     let gap = BracketLook.gap
     let cardHeight = BracketLook.cardHeight
-    return VStack(alignment: .leading, spacing: 10) {
+    eliminationBracket(
+      item,
+      rounds: rounds,
+      cardHeight: cardHeight,
+      gap: gap,
+      roundRobin: item.structure == "score_differential"
+    )
+  }
+
+  private func eliminationBracket(_ item: TournamentItem, rounds: [BracketRound], cardHeight: CGFloat, gap: CGFloat, roundRobin: Bool) -> some View {
+    VStack(alignment: .leading, spacing: 10) {
       Text("BRACKET")
         .font(.system(size: 12, weight: .semibold))
         .tracking(1.2)
@@ -604,7 +619,7 @@ struct DrawDetailView: View {
         .padding(.top, 8)
       ZStack(alignment: .bottomTrailing) {
         ScrollView([.horizontal, .vertical], showsIndicators: false) {
-          bracketBoard(rounds, cardHeight: cardHeight, gap: gap)
+          bracketBoard(rounds, cardHeight: cardHeight, gap: gap, roundRobin: roundRobin)
             .padding(12)
             .padding(.bottom, 36)
         }
@@ -632,7 +647,7 @@ struct DrawDetailView: View {
       .modifier(PadBracketCover(isPresented: $showBracket) {
         NavigationStack {
           ScrollView([.horizontal, .vertical]) {
-            bracketBoard(rounds, cardHeight: cardHeight, gap: gap)
+            bracketBoard(rounds, cardHeight: cardHeight, gap: gap, roundRobin: roundRobin)
               .padding(20)
           }
           .background(BracketLook.canvas)
@@ -694,23 +709,95 @@ struct DrawDetailView: View {
     .presentationDragIndicator(.visible)
   }
 
-  private func bracketBoard(_ rounds: [BracketRound], cardHeight: CGFloat, gap: CGFloat) -> some View {
+  @ViewBuilder
+  private func bracketBoard(_ rounds: [BracketRound], cardHeight: CGFloat, gap: CGFloat, roundRobin: Bool) -> some View {
+    let sides = Array(rounds.dropLast())
+    if roundRobin {
+      roundRobinBoard(rounds, cardHeight: cardHeight, gap: gap)
+    } else if rounds.count >= 2, rounds.last?.matches.count == 1, sides.allSatisfy({ $0.matches.count >= 2 && $0.matches.count.isMultiple(of: 2) }) {
+      mirroredBracket(sides, final: rounds[rounds.count - 1], cardHeight: cardHeight, gap: gap)
+    } else {
+      linearBracket(rounds, cardHeight: cardHeight, gap: gap)
+    }
+  }
+
+  private func roundRobinBoard(_ rounds: [BracketRound], cardHeight: CGFloat, gap: CGFloat) -> some View {
+    HStack(alignment: .top, spacing: 16) {
+      ForEach(rounds, id: \.number) { round in
+        VStack(spacing: gap) {
+          ForEach(round.matches) { match in
+            matchCard(match, title: round.title)
+              .frame(height: cardHeight, alignment: .top)
+          }
+        }
+      }
+    }
+  }
+
+  private func linearBracket(_ rounds: [BracketRound], cardHeight: CGFloat, gap: CGFloat) -> some View {
     let finalDepth = rounds.count - 1
     return HStack(alignment: .top, spacing: 0) {
       ForEach(Array(rounds.enumerated()), id: \.element.number) { index, round in
         bracketColumn(round, depth: index, cardHeight: cardHeight, gap: gap)
         if index < rounds.count - 1 {
-          VStack(spacing: 0) {
-            Color.clear.frame(height: columnInset(index, cardHeight: cardHeight, gap: gap))
-            BracketJoin(matchCount: round.matches.count, cardHeight: cardHeight, gap: columnGap(index, cardHeight: cardHeight, gap: gap))
-              .frame(width: 64)
-              .frame(height: stackHeight(count: round.matches.count, cardHeight: cardHeight, gap: columnGap(index, cardHeight: cardHeight, gap: gap)))
-          }
+          sideJoin(depth: index, matchCount: round.matches.count, towardRight: true, cardHeight: cardHeight, gap: gap)
         }
       }
       if let match = rounds.last?.matches.first, rounds.last?.matches.count == 1 {
         championLink(depth: finalDepth, cardHeight: cardHeight, gap: gap)
         championColumn(match, depth: finalDepth, cardHeight: cardHeight, gap: gap)
+      }
+    }
+  }
+
+  private func mirroredBracket(_ sides: [BracketRound], final: BracketRound, cardHeight: CGFloat, gap: CGFloat) -> some View {
+    let sideDepth = sides.count - 1
+    return HStack(alignment: .top, spacing: 0) {
+      ForEach(Array(sides.enumerated()), id: \.element.number) { index, round in
+        let half = halfRound(round, upper: true)
+        bracketColumn(half, depth: index, cardHeight: cardHeight, gap: gap)
+        if index < sides.count - 1 {
+          sideJoin(depth: index, matchCount: half.matches.count, towardRight: true, cardHeight: cardHeight, gap: gap)
+        }
+      }
+      championLink(depth: sideDepth, cardHeight: cardHeight, gap: gap)
+      centerColumn(final, depth: sideDepth, cardHeight: cardHeight, gap: gap)
+      championLink(depth: sideDepth, cardHeight: cardHeight, gap: gap)
+      ForEach(Array(sides.indices.reversed()), id: \.self) { index in
+        let round = sides[index]
+        let half = halfRound(round, upper: false)
+        if index < sides.count - 1 {
+          sideJoin(depth: index, matchCount: half.matches.count, towardRight: false, cardHeight: cardHeight, gap: gap)
+        }
+        bracketColumn(half, depth: index, cardHeight: cardHeight, gap: gap)
+      }
+    }
+  }
+
+  private func halfRound(_ round: BracketRound, upper: Bool) -> BracketRound {
+    let mid = round.matches.count / 2
+    let matches = upper ? Array(round.matches.prefix(mid)) : Array(round.matches.suffix(round.matches.count - mid))
+    return BracketRound(number: round.number, title: round.title, matches: matches)
+  }
+
+  private func sideJoin(depth: Int, matchCount: Int, towardRight: Bool, cardHeight: CGFloat, gap: CGFloat) -> some View {
+    let joinGap = columnGap(depth, cardHeight: cardHeight, gap: gap)
+    return VStack(spacing: 0) {
+      Color.clear.frame(height: columnInset(depth, cardHeight: cardHeight, gap: gap))
+      BracketJoin(matchCount: matchCount, cardHeight: cardHeight, gap: joinGap, towardRight: towardRight)
+        .frame(width: 64)
+        .frame(height: stackHeight(count: matchCount, cardHeight: cardHeight, gap: joinGap))
+    }
+  }
+
+  private func centerColumn(_ round: BracketRound, depth: Int, cardHeight: CGFloat, gap: CGFloat) -> some View {
+    VStack(spacing: 0) {
+      Color.clear.frame(height: columnInset(depth, cardHeight: cardHeight, gap: gap))
+      if let match = round.matches.first {
+        matchCard(match, title: round.title)
+          .frame(height: cardHeight, alignment: .top)
+        Color.clear.frame(height: 16)
+        championCard(match)
       }
     }
   }
@@ -863,7 +950,10 @@ struct DrawDetailView: View {
       let column = matches
         .filter { $0.round == number }
         .sorted { ($0.index ?? 0) < ($1.index ?? 0) }
-      return BracketRound(number: number, title: roundTitle(matchCount: column.count, totalRounds: total), matches: column)
+      let title = item.structure == "score_differential"
+        ? "Round \(number + 1)"
+        : roundTitle(matchCount: column.count, totalRounds: total)
+      return BracketRound(number: number, title: title, matches: column)
     }
   }
 
@@ -890,14 +980,23 @@ struct DrawDetailView: View {
     return matches
   }
 
-  private func matchCard(_ match: BracketMatch, title: String) -> some View {
+  private func matchCard(_ match: BracketMatch, title: String, fillsWidth: Bool = false) -> some View {
     VStack(spacing: 0) {
       matchHeader(match, title: title)
       slotLine(match, slot: "A")
-      Rectangle().fill(BracketLook.gold.opacity(0.10)).frame(height: 1)
+      HStack(spacing: 8) {
+        Rectangle().fill(BracketLook.gold.opacity(0.20)).frame(height: 1)
+        Text("vs")
+          .font(.system(size: 10, weight: .semibold))
+          .foregroundStyle(BracketLook.goldDeep)
+        Rectangle().fill(BracketLook.gold.opacity(0.20)).frame(height: 1)
+      }
+      .padding(.horizontal, 12)
+      .frame(height: 18)
       slotLine(match, slot: "B")
     }
-    .frame(width: 220, alignment: .top)
+    .frame(maxWidth: fillsWidth ? .infinity : 220, alignment: .top)
+    .frame(width: fillsWidth ? nil : 220, alignment: .top)
     .background(Color.white)
     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     .overlay {
@@ -1142,6 +1241,15 @@ struct DrawDetailView: View {
     return { picker = .player(BracketSeat(matchId: matchId, slot: slot)) }
   }
 
+  private func partnerAction(_ match: BracketMatch, slot: String) -> (() -> Void)? {
+    guard owned || canManage, match.round == 0, !match.singles, let matchId = match.matchId else { return nil }
+    let name = slot == "A" ? match.playerAName : match.playerBName
+    guard let name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+    let hasPartner = slot == "A" ? match.playerAHasPartner : match.playerBHasPartner
+    guard !hasPartner else { return nil }
+    return { picker = .player(BracketSeat(matchId: matchId, slot: slot)) }
+  }
+
   private func removeAction(_ match: BracketMatch, slot: String) -> (() -> Void)? {
     guard owned || canManage, match.round == 0, match.winnerId == nil, let matchId = match.matchId, let item else { return nil }
     let phase = VenueClock.phase(item)
@@ -1250,13 +1358,7 @@ struct DrawDetailView: View {
 
   @ViewBuilder
   private func slotLine(_ match: BracketMatch, slot: String) -> some View {
-    let row = slotRow(match, slot: slot)
-    if let onPick = pickAction(match, slot: slot) {
-      Button(action: onPick) { row }
-        .buttonStyle(.plain)
-    } else {
-      row
-    }
+    slotRow(match, slot: slot)
   }
 
   private func slotRow(_ match: BracketMatch, slot: String) -> some View {
@@ -1271,6 +1373,8 @@ struct DrawDetailView: View {
     let settled = match.winnerId != nil
     let mine = isMe(sideA ? match.playerAUserId : match.playerBUserId) || isMe(sideA ? match.playerAPartnerUserId : match.playerBPartnerUserId)
     let onAdd = addAction(match, slot: slot)
+    let onPartner = partnerAction(match, slot: slot)
+    let onPick = pickAction(match, slot: slot)
     let onRemove = removeAction(match, slot: slot)
     let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     let open = trimmed.isEmpty
@@ -1287,7 +1391,12 @@ struct DrawDetailView: View {
           if hasPartner {
             playerFace(partnerPicture, mine: mine, lost: lost, size: 24, stroke: 1)
           } else if needsPartner {
-            openSeat
+            if let onPartner {
+              Button(action: onPartner) { openSeat }
+                .buttonStyle(.borderless)
+            } else {
+              openSeat
+            }
           }
         }
       }
@@ -1311,6 +1420,10 @@ struct DrawDetailView: View {
               .foregroundStyle(lost ? BracketLook.ink.opacity(0.35) : BracketLook.ink.opacity(0.7))
               .lineLimit(1)
           }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+          onPick?()
         }
       }
       Spacer(minLength: 4)

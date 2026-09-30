@@ -30,6 +30,8 @@ struct BracketMatch: Decodable, Hashable, Identifiable {
   let refereeName: String?
   let startedAt: String?
   let endedAt: String?
+  let seatA: Int?
+  let seatB: Int?
 
   var id: String { matchId ?? "r\(round)-i\(index ?? 0)" }
 
@@ -63,7 +65,9 @@ struct BracketMatch: Decodable, Hashable, Identifiable {
       refereeUserId: nil,
       refereeName: nil,
       startedAt: nil,
-      endedAt: nil
+      endedAt: nil,
+      seatA: nil,
+      seatB: nil
     )
   }
 }
@@ -117,6 +121,7 @@ struct TournamentItem: Decodable, Identifiable, Hashable {
   let thirdPlacePhotoUrl: String?
   let flow: BracketFlow?
   let playFormat: String?
+  let structure: String?
   let spectatorCount: Int?
   let spectating: Bool?
 }
@@ -344,6 +349,21 @@ enum VenueClock {
     return "\(players) players, \(courts) \(courtWord): need \(need) hours"
   }
 
+  static func hoursRequiredRoundRobin(players: Int, courts: Int) -> Int? {
+    guard players >= 3, courts >= 1 else { return nil }
+    let perRound = players / 2
+    let rounds = players % 2 == 0 ? players - 1 : players
+    return rounds * ((perRound + courts - 1) / courts)
+  }
+
+  static func scheduleLimitRoundRobin(players: Int, courts: Int, window: Int) -> String? {
+    guard let need = hoursRequiredRoundRobin(players: players, courts: courts), window < need else {
+      return nil
+    }
+    let courtWord = courts == 1 ? "court" : "courts"
+    return "\(players) players, \(courts) \(courtWord): need \(need) hours"
+  }
+
   static func hoursBetween(start: String, until: String) -> Int? {
     guard let startHour = hour(start) else { return nil }
     var cursor = startHour
@@ -468,6 +488,7 @@ struct TournamentService {
     courtCount: Int,
     playFormat: String,
     division: String,
+    structure: String,
     banner: (data: Data, mime: String, name: String)?
   ) async throws -> TournamentItem {
       guard let encoded = String(data: try JSONEncoder().encode(prizes), encoding: .utf8) else {
@@ -487,6 +508,7 @@ struct TournamentService {
       "courtCount": String(courtCount),
       "playFormat": playFormat,
       "division": division,
+      "structure": structure,
       "source": "challenger",
     ]
     if let fee {

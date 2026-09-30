@@ -1,11 +1,18 @@
 import PhotosUI
 import SwiftUI
 
+private enum DrawSystem: Equatable {
+  case singleElimination
+  case scoreDifferential
+}
+
 struct DrawFormView: View {
   @Binding var path: [AuthRoute]
   let existingId: String?
+  @State private var system: DrawSystem?
   @State private var name = ""
   @State private var size = 8
+  @State private var roundRobinCount: Int?
   @State private var pairing = "shuffle"
   @State private var division = "mens_singles"
 
@@ -39,6 +46,7 @@ struct DrawFormView: View {
   @State private var requesters: [AccountHit] = []
 
   private let sizes = [4, 8, 16, 32]
+  private let roundRobinCounts = Array(3...16)
   private let hours = (0..<24).map { String(format: "%02d:00", $0) }
   private let service = TournamentService()
 
@@ -46,12 +54,32 @@ struct DrawFormView: View {
     ScreenColumn(
       kicker: "",
       title: existingId == nil ? "New tournament" : "Edit tournament",
-      subtitle: existingId == nil ? "This stays a draft until you post it." : (status == "draft" ? "Draft. Add players, then post." : "Name, venue, hours, and courts.")
+      subtitle: formSubtitle
     ) {
+      if existingId == nil, system == nil {
+        pathChoices
+      } else {
       VStack(alignment: .leading, spacing: 16) {
+        if existingId == nil {
+          pathSummary
+        }
         AuthField(title: "Tournament name", text: $name, content: .name)
         nameAndBanner
-        if UIDevice.current.userInterfaceIdiom == .pad, existingId == nil {
+        if system == .scoreDifferential {
+          if UIDevice.current.userInterfaceIdiom == .pad {
+            HStack(alignment: .top, spacing: 14) {
+              playerCountField
+                .frame(maxWidth: .infinity, alignment: .leading)
+              divisionPicker
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            pairingPicker
+          } else {
+            playerCountField
+            pairingPicker
+            divisionPicker
+          }
+        } else if UIDevice.current.userInterfaceIdiom == .pad, existingId == nil {
           HStack(alignment: .top, spacing: 14) {
             bracketSizeField
               .frame(maxWidth: .infinity, alignment: .leading)
@@ -96,7 +124,7 @@ struct DrawFormView: View {
             .font(.system(size: 16, weight: .semibold))
             .foregroundStyle(Theme.ink)
         }
-        if let need = VenueClock.hoursRequired(players: size, courts: courtCount) {
+        if let need = fieldHours {
           let courtWord = courtCount == 1 ? "court" : "courts"
           let hourWord = need == 1 ? "hour" : "hours"
           Text("\(courtCount) \(courtWord): finishes in \(need) \(hourWord).")
@@ -123,6 +151,7 @@ struct DrawFormView: View {
           }
           .disabled(busy)
         }
+      }
       }
     }
     .navigationBarTitleDisplayMode(.inline)
@@ -152,6 +181,111 @@ struct DrawFormView: View {
   private var playFormatValue: String {
     if !division.hasSuffix("doubles") { return "singles" }
     return pairing == "fixed" ? "doubles" : "singles"
+  }
+
+  private var formSubtitle: String {
+    if existingId != nil {
+      return status == "draft" ? "Draft. Add players, then post." : "Name, venue, hours, and courts."
+    }
+    switch system {
+    case .singleElimination:
+      return "This stays a draft until you post it."
+    case .scoreDifferential:
+      return "Everyone plays the field. Place is wins, then point difference."
+    case nil:
+      return "Choose how this tournament is played."
+    }
+  }
+
+  private var fieldHours: Int? {
+    if system == .scoreDifferential {
+      guard let roundRobinCount else { return nil }
+      return VenueClock.hoursRequiredRoundRobin(players: roundRobinCount, courts: courtCount)
+    }
+    return VenueClock.hoursRequired(players: size, courts: courtCount)
+  }
+
+  private var pathChoices: some View {
+    VStack(spacing: 12) {
+      pathCard(
+        title: "Single elimination",
+        detail: "Lose once and you're out. Winners advance to the final."
+      ) {
+        system = .singleElimination
+      }
+      pathCard(
+        title: "Score differential round robin",
+        detail: "Every player meets the field. Standings use wins, then point difference."
+      ) {
+        system = .scoreDifferential
+      }
+    }
+  }
+
+  private var pathSummary: some View {
+    HStack(alignment: .center, spacing: 12) {
+      Text(system == .scoreDifferential ? "Score differential round robin" : "Single elimination")
+        .font(.system(size: 16, weight: .semibold))
+        .foregroundStyle(Theme.ink)
+      Spacer(minLength: 8)
+      Button("Change") {
+        system = nil
+      }
+      .font(.system(size: 15, weight: .semibold))
+      .foregroundStyle(Theme.clay)
+    }
+    .padding(.horizontal, 14)
+    .frame(minHeight: 54)
+    .background(Theme.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    .overlay {
+      RoundedRectangle(cornerRadius: 16, style: .continuous)
+        .stroke(Theme.line, lineWidth: 1)
+    }
+  }
+
+  private func pathCard(title: String, detail: String, action: @escaping () -> Void) -> some View {
+    Button(action: action) {
+      VStack(alignment: .leading, spacing: 6) {
+        Text(title)
+          .font(.system(size: 16, weight: .semibold))
+          .foregroundStyle(Theme.ink)
+        Text(detail)
+          .font(.system(size: 13))
+          .foregroundStyle(Theme.mute)
+          .multilineTextAlignment(.leading)
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .padding(14)
+      .background(Theme.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+      .overlay {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+          .stroke(Theme.line, lineWidth: 1)
+      }
+    }
+    .buttonStyle(.plain)
+  }
+
+  private var playerCountField: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("Players")
+        .font(.system(size: 13, weight: .medium))
+        .foregroundStyle(Theme.mute)
+      Picker("Players", selection: $roundRobinCount) {
+        Text("Select").tag(Optional<Int>.none)
+        ForEach(roundRobinCounts, id: \.self) { count in
+          Text("\(count) players").tag(Optional(count))
+        }
+      }
+      .pickerStyle(.menu)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .padding(.horizontal, 14)
+      .frame(height: 54)
+      .background(Theme.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+      .overlay {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+          .stroke(Theme.line, lineWidth: 1)
+      }
+    }
   }
 
   private var bracketSizeField: some View {
@@ -325,6 +459,12 @@ struct DrawFormView: View {
         let item = try await service.detail(id: existingId, managing: true)
         name = item.name
         status = item.status
+        if item.structure == "score_differential" {
+          system = .scoreDifferential
+          roundRobinCount = item.bracketSize
+        } else {
+          system = .singleElimination
+        }
         pairing = item.playFormat == "doubles" ? "fixed" : "shuffle"
         if let stored = item.division, divisions.contains(where: { $0.id == stored }) {
           division = stored
@@ -377,16 +517,38 @@ struct DrawFormView: View {
   }
 
   private func seats(from item: TournamentItem) -> [DraftSeat] {
+    if item.structure == "score_differential" {
+      return roundRobinSeats(from: item)
+    }
     let matches = (item.flow?.nodes.compactMap(\.match) ?? []).filter { $0.round == 0 }
     return matches
       .sorted { ($0.index ?? 0) < ($1.index ?? 0) }
       .flatMap { match in
         guard let matchId = match.matchId, let index = match.index else { return [DraftSeat]() }
         return [
-          DraftSeat(matchId: matchId, slot: "A", index: index, name: match.playerAName),
-          DraftSeat(matchId: matchId, slot: "B", index: index, name: match.playerBName),
+          DraftSeat(matchId: matchId, slot: "A", index: index, name: match.playerAName, seatNumber: nil),
+          DraftSeat(matchId: matchId, slot: "B", index: index, name: match.playerBName, seatNumber: nil),
         ]
       }
+  }
+
+  private func roundRobinSeats(from item: TournamentItem) -> [DraftSeat] {
+    let matches = (item.flow?.nodes.compactMap(\.match) ?? []).sorted {
+      if $0.round != $1.round { return $0.round < $1.round }
+      return ($0.index ?? 0) < ($1.index ?? 0)
+    }
+    var seen = Set<Int>()
+    var rows: [DraftSeat] = []
+    for match in matches {
+      guard let matchId = match.matchId else { continue }
+      if let seat = match.seatA, seen.insert(seat).inserted {
+        rows.append(DraftSeat(matchId: matchId, slot: "A", index: seat, name: match.playerAName, seatNumber: seat))
+      }
+      if let seat = match.seatB, seen.insert(seat).inserted {
+        rows.append(DraftSeat(matchId: matchId, slot: "B", index: seat, name: match.playerBName, seatNumber: seat))
+      }
+    }
+    return rows.sorted { $0.index < $1.index }
   }
 
   private var players: some View {
@@ -398,7 +560,7 @@ struct DrawFormView: View {
       ForEach(seats) { seat in
         HStack(spacing: 12) {
           VStack(alignment: .leading, spacing: 2) {
-            Text("Match \(seat.index + 1) · \(seat.slot)")
+            Text(seat.seatNumber == nil ? "Match \(seat.index + 1) · \(seat.slot)" : "Player \(seat.index + 1)")
               .font(.system(size: 12, weight: .semibold))
               .foregroundStyle(Theme.mute)
             if let name = seat.name {
@@ -530,7 +692,12 @@ struct DrawFormView: View {
       errorMessage = "Until must be after the start time"
       return
     }
-    if let limit = VenueClock.scheduleLimit(players: size, courts: courtCount, window: window) {
+    if system == .scoreDifferential {
+      if let limit = VenueClock.scheduleLimitRoundRobin(players: size, courts: courtCount, window: window) {
+        errorMessage = limit
+        return
+      }
+    } else if let limit = VenueClock.scheduleLimit(players: size, courts: courtCount, window: window) {
       errorMessage = limit
       return
     }
@@ -619,9 +786,23 @@ struct DrawFormView: View {
       errorMessage = "Until must be after the start time"
       return
     }
-    if let limit = VenueClock.scheduleLimit(players: size, courts: courtCount, window: window) {
-      errorMessage = limit
-      return
+    let fieldSize: Int
+    if system == .scoreDifferential {
+      guard let roundRobinCount else {
+        errorMessage = "Player count is required"
+        return
+      }
+      fieldSize = roundRobinCount
+      if let limit = VenueClock.scheduleLimitRoundRobin(players: fieldSize, courts: courtCount, window: window) {
+        errorMessage = limit
+        return
+      }
+    } else {
+      fieldSize = size
+      if let limit = VenueClock.scheduleLimit(players: fieldSize, courts: courtCount, window: window) {
+        errorMessage = limit
+        return
+      }
     }
     let startsAt = "\(key)T\(startSlot):00+08:00"
     busy = true
@@ -650,7 +831,7 @@ struct DrawFormView: View {
       } else {
         let created = try await service.create(
           name: trimmedName,
-          size: size,
+          size: fieldSize,
           startsAt: startsAt,
           endsAt: endsAt,
           courtIds: [],
@@ -662,6 +843,7 @@ struct DrawFormView: View {
           courtCount: courtCount,
           playFormat: playFormatValue,
           division: division,
+          structure: system == .scoreDifferential ? "score_differential" : "single_elimination",
           banner: banner
         )
         savedId = created.id
@@ -680,7 +862,8 @@ private struct DraftSeat: Identifiable, Hashable {
   let slot: String
   let index: Int
   let name: String?
-  var id: String { "\(matchId)-\(slot)" }
+  let seatNumber: Int?
+  var id: String { seatNumber == nil ? "\(matchId)-\(slot)" : "seat-\(index)" }
 }
 
 struct PlayerSearchSheet: View {
